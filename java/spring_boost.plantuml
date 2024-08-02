@@ -1,0 +1,60 @@
+@startuml
+
+title spring容器启动主要流程
+
+start
+:实例化SpringApplication;
+note left: 1.从spring.factories加载自动配置 \n 2.从1中的加载对应的ApplicationContextInitializer 加载ApplicationContextInitializer \n 3.加载ApplicationListener
+:创建BootstrapContext;
+:加载SpringApplicationRunListener;
+:加载环境及Properties等;
+:创建上下文ApplicationContext;
+:使用ApplicationContextFactory工厂创建ApplicationContext;
+note left: 具体是工厂为spring.factories配置值;
+group 准备ApplicationContext
+	:调用ApplicationContextInitializer;
+	note left: 设置ApplicationContext的\nBeanFactoryPostProcessor\nContextId\nApplicationListener
+	:关闭BootstrapContext,ApplicationContext准备完成;
+	:创建BeanDefinitionLoader;
+	:BeanDefinitionLoader加载启动类的	BeanDefinition;
+end group
+
+group 刷新ApplicationContext
+	:准备BeanFactory;
+	note left: 配置BeanFactory的ClassLoader和后置处理器;
+	:postProcessBeanFactory;
+	note left: BeanFactory初始化后的修改;
+	group 调用BeanFactory后置处理器
+		:调用BeanDefinitionRegistryPostProcessors;
+		note left: ConfigurationClassParser会处理\n @Configuration\n @ComponentScan\n @Import\n @ImportResource\n 的后置处理器在这里调用\n用来解析BeanDefinitino;
+		note right: 加载@ComponentScan下的BeanDefinition \n 通过加载classpath:basePackge下的所有class类进行加载;
+		:加载META-INF/spring/full-qualified-annotation-name.imports下的所有BeanDefinition;
+		note right:加载SpringBoot默认BeanDefinition \n DeferredImportSelectorHandler#process;
+	end group
+end group
+:创建WebServer;
+group 实例化Bean
+	:根据BeanDefinition实例化Bean;
+	if (bean是工厂bean) then (true)
+		note left: 工厂bean的存在固定前缀&;
+
+	else (false)
+		:查看父工厂是否存在该bean实例;
+		:循环依赖校验;
+		:执行BeanPostProcessors的bean实例化前置处理;
+		:根据构造函数实例化bean;
+		:执行BeanDefinitionPostProcessor实例的后置处理;
+		:填充bean属性;
+		note left: 通过AutowiredAnnotationBeanPostProcessor进行递归属性注入;
+		group 初始化bean
+			:调用awareMethods方法;
+			:调用BeanPostProcessorsBeforeInitialization;
+			:调用bean的init方法;
+			:调用BeanPostProcessorsAfterInitialization;
+		end group
+		
+	endif
+end group
+stop
+
+@enduml
